@@ -346,34 +346,19 @@ async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Расходов нет")
         return
     
-    # Показываем последний расход
+    # Показываем последний расход перед удалением
     last_expense = data["expenses"][-1]
-    msg = "⚠️ **ПОСЛЕДНИЙ РАСХОД:**\n\n"
+    msg = "⚠️ **ПОСЛЕДНИЙ РАСХОД (УДАЛЯЕТСЯ):**\n\n"
     msg += f"📅 Дата: {last_expense['date']}\n"
     msg += f"💰 Сумма: {last_expense['amount']:,} ₽\n"
     msg += f"📌 Категория: {last_expense['category']}\n"
     msg += f"📝 Описание: {last_expense['description']}\n"
     msg += f"👤 От кого: {last_expense['who']}\n\n"
-    msg += "❓ Ты уверен? Напиши **да** чтобы удалить или **нет** чтобы отменить"
     
-    context.user_data["pending_delete"] = True
+    deleted = data["expenses"].pop()
+    save_data(data)
+    msg += "✅ **УДАЛЕНО!**"
     await update.message.reply_text(msg)
-
-async def confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_committee(update.effective_user.id):
-        return
-    
-    if context.user_data.get("pending_delete"):
-        if update.message.text.lower() == "да":
-            data = load_data()
-            if data["expenses"]:
-                deleted = data["expenses"].pop()
-                save_data(data)
-                await update.message.reply_text(f"✅ УДАЛЕНО: {deleted['amount']:,} ₽ ({deleted['description']})")
-            context.user_data["pending_delete"] = False
-        elif update.message.text.lower() == "нет":
-            await update.message.reply_text("❌ Отменено")
-            context.user_data["pending_delete"] = False
 
 async def expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_committee(update.effective_user.id):
@@ -630,7 +615,6 @@ def main():
     app.add_handler(CommandHandler("december", december))
     
     app.add_handler(CommandHandler("deletexp", delete_expense))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete))
     app.add_handler(news_conv)
     app.add_handler(fundraiser_conv)
     app.add_handler(event_conv)

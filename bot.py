@@ -137,7 +137,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     msg = f"👋 Привет! Бот класса 1-К.\nID: {user_id}\n\n"
     msg += "💰 ФИНАНСЫ:\n/отчет — финансы\n/история — расходы\n/экспорт — скачать Excel\n\n"
-    msg += "🎂 ДНИ РОЖДЕНИЯ:\n/др — все ДР\n/октябрь и т.д. — по месяцам\n\n"
+    msg += "🎂 ДНИ РОЖДЕНИЯ:\n/др — все ДР\n/январь, /февраль, /март, /апрель, /май, /июнь, /июль, /август, /сентябрь, /октябрь, /ноябрь, /декабрь\n\n"
     msg += "📰 НОВОСТИ:\n/новости — все новости\n\n"
     msg += "🎯 СБОРЫ:\n/сборы — открытые сборы\n\n"
     msg += "📅 СОБЫТИЯ:\n/события — расписание\n\n"
@@ -152,9 +152,15 @@ async def export_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         file_path = create_excel_report(data)
         with open(file_path, 'rb') as f:
-            await update.message.reply_document(f, filename=f"Расходы_1К_{datetime.now().strftime('%d.%m.%Y')}.xlsx")
+            await update.message.reply_document(
+                document=f,
+                filename=f"Расходы_1К_{datetime.now().strftime('%d.%m.%Y')}.xlsx",
+                caption="📊 Отчёт по расходам класса 1-К"
+            )
+        os.remove(file_path)
         logger.info("✅ Файл отправлен")
     except Exception as e:
+        logger.error(f"Ошибка экспорта: {str(e)}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -374,9 +380,124 @@ async def birthdays_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += "\n"
     await update.message.reply_text(msg)
 
+# ФУНКЦИИ ДЛЯ КАЖДОГО МЕСЯЦА
+async def january(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Январь"]
+    if not bdays:
+        await update.message.reply_text("В январе дней рождения нет")
+        return
+    msg = "🎂 **ЯНВАРЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def february(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Февраль"]
+    if not bdays:
+        await update.message.reply_text("В феврале дней рождения нет")
+        return
+    msg = "🎂 **ФЕВРАЛЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def march(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Март"]
+    if not bdays:
+        await update.message.reply_text("В марте дней рождения нет")
+        return
+    msg = "🎂 **МАРТ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def april(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Апрель"]
+    if not bdays:
+        await update.message.reply_text("В апреле дней рождения нет")
+        return
+    msg = "🎂 **АПРЕЛЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def may(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Май"]
+    if not bdays:
+        await update.message.reply_text("В мае дней рождения нет")
+        return
+    msg = "🎂 **МАЙ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def june(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Июнь"]
+    if not bdays:
+        await update.message.reply_text("В июне дней рождения нет")
+        return
+    msg = "🎂 **ИЮНЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def july(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Июль"]
+    if not bdays:
+        await update.message.reply_text("В июле дней рождения нет")
+        return
+    msg = "🎂 **ИЮЛЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def august(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Август"]
+    if not bdays:
+        await update.message.reply_text("В августе дней рождения нет")
+        return
+    msg = "🎂 **АВГУСТ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def september(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Сентябрь"]
+    if not bdays:
+        await update.message.reply_text("В сентябре дней рождения нет")
+        return
+    msg = "🎂 **СЕНТЯБРЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
 async def october(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Октябрь"]
+    if not bdays:
+        await update.message.reply_text("В октябре дней рождения нет")
+        return
     msg = "🎂 **ОКТЯБРЬ:**\n"
-    for name, date in BIRTHDAYS["Октябрь"]:
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def november(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Ноябрь"]
+    if not bdays:
+        await update.message.reply_text("В ноябре дней рождения нет")
+        return
+    msg = "🎂 **НОЯБРЬ:**\n"
+    for name, date in bdays:
+        msg += f"{date} — {name}\n"
+    await update.message.reply_text(msg)
+
+async def december(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bdays = BIRTHDAYS["Декабрь"]
+    if not bdays:
+        await update.message.reply_text("В декабре дней рождения нет")
+        return
+    msg = "🎂 **ДЕКАБРЬ:**\n"
+    for name, date in bdays:
         msg += f"{date} — {name}\n"
     await update.message.reply_text(msg)
 
@@ -423,6 +544,7 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     
+    # Команды
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("отчет", report))
     app.add_handler(CommandHandler("история", history))
@@ -431,7 +553,21 @@ def main():
     app.add_handler(CommandHandler("сборы", show_fundraisers))
     app.add_handler(CommandHandler("события", show_events))
     app.add_handler(CommandHandler("др", birthdays_all))
+    
+    # ДР по месяцам
+    app.add_handler(CommandHandler("январь", january))
+    app.add_handler(CommandHandler("февраль", february))
+    app.add_handler(CommandHandler("март", march))
+    app.add_handler(CommandHandler("апрель", april))
+    app.add_handler(CommandHandler("май", may))
+    app.add_handler(CommandHandler("июнь", june))
+    app.add_handler(CommandHandler("июль", july))
+    app.add_handler(CommandHandler("август", august))
+    app.add_handler(CommandHandler("сентябрь", september))
     app.add_handler(CommandHandler("октябрь", october))
+    app.add_handler(CommandHandler("ноябрь", november))
+    app.add_handler(CommandHandler("декабрь", december))
+    
     app.add_handler(CommandHandler("удалить", delete_expense))
     app.add_handler(news_conv)
     app.add_handler(fundraiser_conv)

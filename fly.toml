@@ -1,0 +1,11 @@
+app = "class-finances-bot"
+primary_region = "ams"
+
+[build]
+dockerfile = "Dockerfile"
+
+[processes]
+worker = "python bot.py"
+
+[env]
+PYTHONUNBUFFERED = "1"

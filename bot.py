@@ -136,12 +136,12 @@ def create_excel_report(data):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     msg = f"👋 Привет! Бот класса 1-К.\nID: {user_id}\n\n"
-    msg += "💰 ФИНАНСЫ:\n/отчет — финансы\n/история — расходы\n/экспорт — скачать Excel\n\n"
-    msg += "🎂 ДНИ РОЖДЕНИЯ:\n/др — все ДР\n/январь, /февраль, /март, /апрель, /май, /июнь, /июль, /август, /сентябрь, /октябрь, /ноябрь, /декабрь\n\n"
-    msg += "📰 НОВОСТИ:\n/новости — все новости\n\n"
-    msg += "🎯 СБОРЫ:\n/сборы — открытые сборы\n\n"
-    msg += "📅 СОБЫТИЯ:\n/события — расписание\n\n"
-    msg += "🛠 КОМИТЕТ:\n/расход — расход\n/новость — добавить новость\n/сбор — создать сбор\n/событие — добавить событие\n/удалить — удалить расход"
+    msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
+    msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n/january, /february, /march, /april, /may, /june, /july, /august, /september, /october, /november, /december\n\n"
+    msg += "📰 НОВОСТИ:\n/news — все новости\n\n"
+    msg += "🎯 СБОРЫ:\n/fundraisers — открытые сборы\n\n"
+    msg += "📅 СОБЫТИЯ:\n/events — расписание\n\n"
+    msg += "🛠 КОМИТЕТ:\n/expense — расход\n/addnews — добавить новость\n/newfund — создать сбор\n/newevent — добавить событие\n/deletexp — удалить расход"
     await update.message.reply_text(msg)
 
 async def export_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -508,24 +508,24 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
     expense_conv = ConversationHandler(
-        entry_points=[CommandHandler("расход", expense_start)],
+        entry_points=[CommandHandler("expense", expense_start)],
         states={
             AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, amount_received)],
             CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, category_received)],
             DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, description_received)],
             WHO: [MessageHandler(filters.TEXT & ~filters.COMMAND, who_received)],
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("отмена", cancel)],
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
     
     news_conv = ConversationHandler(
-        entry_points=[CommandHandler("новость", add_news_start)],
+        entry_points=[CommandHandler("addnews", add_news_start)],
         states={NEWS_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, news_text_received)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     
     fundraiser_conv = ConversationHandler(
-        entry_points=[CommandHandler("сбор", create_fundraiser_start)],
+        entry_points=[CommandHandler("newfund", create_fundraiser_start)],
         states={
             FUNDRAISER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, fundraiser_name_received)],
             FUNDRAISER_GOAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, fundraiser_goal_received)],
@@ -535,7 +535,7 @@ def main():
     )
     
     event_conv = ConversationHandler(
-        entry_points=[CommandHandler("событие", create_event_start)],
+        entry_points=[CommandHandler("newevent", create_event_start)],
         states={
             EVENT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, event_name_received)],
             EVENT_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, event_date_received)],
@@ -546,29 +546,29 @@ def main():
     
     # Команды
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("отчет", report))
-    app.add_handler(CommandHandler("история", history))
-    app.add_handler(CommandHandler("экспорт", export_expenses))
-    app.add_handler(CommandHandler("новости", show_news))
-    app.add_handler(CommandHandler("сборы", show_fundraisers))
-    app.add_handler(CommandHandler("события", show_events))
-    app.add_handler(CommandHandler("др", birthdays_all))
+    app.add_handler(CommandHandler("report", report))
+    app.add_handler(CommandHandler("history", history))
+    app.add_handler(CommandHandler("export", export_expenses))
+    app.add_handler(CommandHandler("news", show_news))
+    app.add_handler(CommandHandler("fundraisers", show_fundraisers))
+    app.add_handler(CommandHandler("events", show_events))
+    app.add_handler(CommandHandler("birthdays", birthdays_all))
     
     # ДР по месяцам
-    app.add_handler(CommandHandler("январь", january))
-    app.add_handler(CommandHandler("февраль", february))
-    app.add_handler(CommandHandler("март", march))
-    app.add_handler(CommandHandler("апрель", april))
-    app.add_handler(CommandHandler("май", may))
-    app.add_handler(CommandHandler("июнь", june))
-    app.add_handler(CommandHandler("июль", july))
-    app.add_handler(CommandHandler("август", august))
-    app.add_handler(CommandHandler("сентябрь", september))
-    app.add_handler(CommandHandler("октябрь", october))
-    app.add_handler(CommandHandler("ноябрь", november))
-    app.add_handler(CommandHandler("декабрь", december))
+    app.add_handler(CommandHandler("january", january))
+    app.add_handler(CommandHandler("february", february))
+    app.add_handler(CommandHandler("march", march))
+    app.add_handler(CommandHandler("april", april))
+    app.add_handler(CommandHandler("may", may))
+    app.add_handler(CommandHandler("june", june))
+    app.add_handler(CommandHandler("july", july))
+    app.add_handler(CommandHandler("august", august))
+    app.add_handler(CommandHandler("september", september))
+    app.add_handler(CommandHandler("october", october))
+    app.add_handler(CommandHandler("november", november))
+    app.add_handler(CommandHandler("december", december))
     
-    app.add_handler(CommandHandler("удалить", delete_expense))
+    app.add_handler(CommandHandler("deletexp", delete_expense))
     app.add_handler(news_conv)
     app.add_handler(fundraiser_conv)
     app.add_handler(event_conv)

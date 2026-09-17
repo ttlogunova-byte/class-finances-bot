@@ -143,7 +143,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if is_committee(user_id):
         # СООБЩЕНИЕ ДЛЯ КОМИТЕТА
-        msg = f"👋 Привет, {name}! Бот класса 1-К (КОМИТЕТ)\n\n"
+        msg = f"👋 Привет, {name}! Бот класса 1-К (КОМИТЕТ)\n"
+        msg += f"🆔 **ID: {user_id}**\n\n"
         msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
         msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n/january, /february, /march... /december\n\n"
         msg += "📰 НОВОСТИ:\n/news — все новости\n\n"
@@ -157,7 +158,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += "/deletexp — удалить расход"
     else:
         # СООБЩЕНИЕ ДЛЯ РОДИТЕЛЕЙ
-        msg = f"👋 Привет, {name}! Бот класса 1-К\n\n"
+        msg = f"👋 Привет, {name}! Бот класса 1-К\n"
+        msg += f"🆔 **ID: {user_id}**\n\n"
         msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
         msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n/january, /february, /march... /december\n\n"
         msg += "📰 НОВОСТИ:\n/news — все новости класса\n\n"
@@ -338,13 +340,40 @@ async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_committee(update.effective_user.id):
         await update.message.reply_text("❌ Нет прав")
         return
+    
     data = load_data()
     if not data["expenses"]:
         await update.message.reply_text("❌ Расходов нет")
         return
-    deleted = data["expenses"].pop()
-    save_data(data)
-    await update.message.reply_text(f"✅ Удалён: {deleted['amount']:,} ₽ ({deleted['description']})")
+    
+    # Показываем последний расход
+    last_expense = data["expenses"][-1]
+    msg = "⚠️ **ПОСЛЕДНИЙ РАСХОД:**\n\n"
+    msg += f"📅 Дата: {last_expense['date']}\n"
+    msg += f"💰 Сумма: {last_expense['amount']:,} ₽\n"
+    msg += f"📌 Категория: {last_expense['category']}\n"
+    msg += f"📝 Описание: {last_expense['description']}\n"
+    msg += f"👤 От кого: {last_expense['who']}\n\n"
+    msg += "❓ Ты уверен? Напиши **да** чтобы удалить или **нет** чтобы отменить"
+    
+    context.user_data["pending_delete"] = True
+    await update.message.reply_text(msg)
+
+async def confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_committee(update.effective_user.id):
+        return
+    
+    if context.user_data.get("pending_delete"):
+        if update.message.text.lower() == "да":
+            data = load_data()
+            if data["expenses"]:
+                deleted = data["expenses"].pop()
+                save_data(data)
+                await update.message.reply_text(f"✅ УДАЛЕНО: {deleted['amount']:,} ₽ ({deleted['description']})")
+            context.user_data["pending_delete"] = False
+        elif update.message.text.lower() == "нет":
+            await update.message.reply_text("❌ Отменено")
+            context.user_data["pending_delete"] = False
 
 async def expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_committee(update.effective_user.id):
@@ -601,6 +630,7 @@ def main():
     app.add_handler(CommandHandler("december", december))
     
     app.add_handler(CommandHandler("deletexp", delete_expense))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete))
     app.add_handler(news_conv)
     app.add_handler(fundraiser_conv)
     app.add_handler(event_conv)

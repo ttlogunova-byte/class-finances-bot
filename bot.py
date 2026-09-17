@@ -10,7 +10,7 @@ from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
-    ConversationHandler, ContextTypes
+    ConversationHandler, ContextTypes, PicklePersistence
 )
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -19,7 +19,11 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 BASE_FUND = 41000
 DATA_FILE = "/data/data.json"
 EXCEL_FILE = "/tmp/expenses.xlsx"
+PERSISTENCE_FILE = "/data/conversation_state"
 CATEGORIES = ["📚 Материалы", "🍕 Питание", "🎉 Мероприятие", "🏠 Организационные", "🚗 Доставка"]
+
+# ID ЧЛЕНОВ КОМИТЕТА
+COMMITTEE_IDS = [447774674, 6013055364]
 
 AMOUNT, CATEGORY, DESCRIPTION, WHO = range(4)
 NEWS_TEXT, FUNDRAISER_NAME, FUNDRAISER_GOAL, FUNDRAISER_DESC = range(4, 8)
@@ -55,7 +59,7 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def is_committee(user_id):
-    return True
+    return user_id in COMMITTEE_IDS
 
 def create_excel_report(data):
     """Создаёт Excel файл с расходами"""
@@ -135,13 +139,31 @@ def create_excel_report(data):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    msg = f"👋 Привет! Бот класса 1-К.\nID: {user_id}\n\n"
-    msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
-    msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n/january, /february, /march, /april, /may, /june, /july, /august, /september, /october, /november, /december\n\n"
-    msg += "📰 НОВОСТИ:\n/news — все новости\n\n"
-    msg += "🎯 СБОРЫ:\n/fundraisers — открытые сборы\n\n"
-    msg += "📅 СОБЫТИЯ:\n/events — расписание\n\n"
-    msg += "🛠 КОМИТЕТ:\n/expense — расход\n/addnews — добавить новость\n/newfund — создать сбор\n/newevent — добавить событие\n/deletexp — удалить расход"
+    name = update.effective_user.first_name or "Друг"
+    
+    if is_committee(user_id):
+        # СООБЩЕНИЕ ДЛЯ КОМИТЕТА
+        msg = f"👋 Привет, {name}! Бот класса 1-К (КОМИТЕТ)\n\n"
+        msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
+        msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n/january, /february, /march... /december\n\n"
+        msg += "📰 НОВОСТИ:\n/news — все новости\n\n"
+        msg += "🎯 СБОРЫ:\n/fundraisers — открытые сборы\n\n"
+        msg += "📅 СОБЫТИЯ:\n/events — расписание\n\n"
+        msg += "🛠️ ТОЛЬКО ДЛЯ КОМИТЕТА:\n"
+        msg += "/expense — добавить расход\n"
+        msg += "/addnews — добавить новость\n"
+        msg += "/newfund — создать сбор\n"
+        msg += "/newevent — добавить событие\n"
+        msg += "/deletexp — удалить расход"
+    else:
+        # СООБЩЕНИЕ ДЛЯ РОДИТЕЛЕЙ
+        msg = f"👋 Привет, {name}! Бот класса 1-К\n\n"
+        msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
+        msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n/january, /february, /march... /december\n\n"
+        msg += "📰 НОВОСТИ:\n/news — все новости класса\n\n"
+        msg += "🎯 СБОРЫ:\n/fundraisers — открытые сборы\n\n"
+        msg += "📅 СОБЫТИЯ:\n/events — расписание мероприятий"
+    
     await update.message.reply_text(msg)
 
 async def export_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -505,7 +527,9 @@ def main():
     if not BOT_TOKEN:
         raise RuntimeError("Нет BOT_TOKEN!")
     
-    app = Application.builder().token(BOT_TOKEN).build()
+    # Добавляем persistence для сохранения состояния
+    persistence = PicklePersistence(filepath=PERSISTENCE_FILE)
+    app = Application.builder().token(BOT_TOKEN).persistence(persistence).build()
     
     expense_conv = ConversationHandler(
         entry_points=[CommandHandler("expense", expense_start)],
@@ -516,12 +540,16 @@ def main():
             WHO: [MessageHandler(filters.TEXT & ~filters.COMMAND, who_received)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        name="expense_conv",
+        persistent=True
     )
     
     news_conv = ConversationHandler(
         entry_points=[CommandHandler("addnews", add_news_start)],
         states={NEWS_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, news_text_received)]},
         fallbacks=[CommandHandler("cancel", cancel)],
+        name="news_conv",
+        persistent=True
     )
     
     fundraiser_conv = ConversationHandler(
@@ -532,6 +560,8 @@ def main():
             FUNDRAISER_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, fundraiser_desc_received)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        name="fundraiser_conv",
+        persistent=True
     )
     
     event_conv = ConversationHandler(
@@ -542,6 +572,8 @@ def main():
             EVENT_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, event_desc_received)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        name="event_conv",
+        persistent=True
     )
     
     # Команды

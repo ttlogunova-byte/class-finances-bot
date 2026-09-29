@@ -22,6 +22,7 @@ COMMITTEE_IDS = [447774674, 6013055364]
 AMOUNT, CATEGORY, DESCRIPTION, WHO = range(4)
 NEWS_TEXT, FUNDRAISER_NAME, FUNDRAISER_GOAL, FUNDRAISER_DESC = range(4, 8)
 EVENT_NAME, EVENT_DATE, EVENT_DESC = range(8, 11)
+CONTRIB_AMOUNT, CONTRIB_WHO = range(11, 13)
 
 BIRTHDAYS = {
     "Январь": [("Гилёва Валерия", "11.01"), ("Хрусталев Матвей", "21.01"), ("Власов Тимофей", "23.01")],
@@ -66,7 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += "📰 НОВОСТИ:\n/news — новости\n\n"
         msg += "🎯 СБОРЫ:\n/fundraisers — сборы\n\n"
         msg += "📅 СОБЫТИЯ:\n/events — события\n\n"
-        msg += "🛠️ КОМИТЕТ:\n/expense — расход\n/addnews — новость\n/newfund — сбор\n/newevent — событие\n/deletexp — удалить расход"
+        msg += "🛠️ КОМИТЕТ:\n/expense — расход\n/contribution — взнос\n/addnews — новость\n/newfund — сбор\n/newevent — событие\n/deletexp — удалить расход"
     else:
         msg = f"👋 Привет, {name}! Бот класса 1-К\n"
         msg += f"🆔 **ID: {user_id}**\n\n"
@@ -81,9 +82,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     expenses = sum(e["amount"] for e in data["expenses"])
-    current = BASE_FUND - expenses
-    msg = f"📊 ФИНАНСЫ\n\n💰 Фонд: {BASE_FUND:,} ₽\n➖ Расходы: {expenses:,} ₽\n📈 Остаток: {current:,} ₽"
+    contributions = sum(c["amount"] for c in data.get("contributions", []))
+    current = BASE_FUND + contributions - expenses
+    msg = f"📊 ФИНАНСЫ\n\n"
+    msg += f"💰 Базовый фонд: {BASE_FUND:,} ₽\n"
+    msg += f"➕ Взносы: {contributions:,} ₽\n"
+    msg += f"➖ Расходы: {expenses:,} ₽\n"
+    msg += f"📈 **Остаток: {current:,} ₽**"
     await update.message.reply_text(msg)
+
+async def contribution_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_committee(update.effective_user.id):
+        await update.message.reply_text("❌ Нет прав")
+        return ConversationHandler.END
+    await update.message.reply_text("💳 Сумма взноса?")
+    return CONTRIB_AMOUNT
+
+async def contrib_amount_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        context.user_data["contrib_amount"] = float(update.message.text)
+        await update.message.reply_text("👤 От кого?")
+        return CONTRIB_WHO
+    except:
+        await update.message.reply_text("Введи число")
+        return CONTRIB_AMOUNT
+
+async def contrib_who_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = load_data()
+    if "contributions" not in data:
+        data["contributions"] = []
+    data["contributions"].append({
+        "date": datetime.now().strftime("%d.%m.%Y"),
+        "amount": context.user_data["contrib_amount"],
+        "who": update.message.text
+    })
+    save_data(data)
+    await update.message.reply_text(f"✅ Взнос добавлен!")
+    return ConversationHandler.END
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -236,6 +271,17 @@ def main():
         persistent=True
     )
     
+    contrib_conv = ConversationHandler(
+        entry_points=[CommandHandler("contribution", contribution_start)],
+        states={
+            CONTRIB_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contrib_amount_received)],
+            CONTRIB_WHO: [MessageHandler(filters.TEXT & ~filters.COMMAND, contrib_who_received)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        name="contribution",
+        persistent=True
+    )
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report))
     app.add_handler(CommandHandler("history", history))
@@ -246,6 +292,7 @@ def main():
     app.add_handler(CommandHandler("deletexp", delete_expense))
     app.add_handler(expense_conv)
     app.add_handler(news_conv)
+    app.add_handler(contrib_conv)
     
     logger.info("✅ БОТ ЗАПУЩЕН!")
     app.run_polling()

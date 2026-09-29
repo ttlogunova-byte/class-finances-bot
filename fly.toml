@@ -9,3 +9,6 @@ worker = "python bot.py"
 
 [env]
 PYTHONUNBUFFERED = "1"
+[mounts]
+source = "data"
+destination = "/data"

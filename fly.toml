@@ -4,8 +4,12 @@ primary_region = "ams"
 [build]
 dockerfile = "Dockerfile"
 
+[processes]
+worker = "python bot.py"
+
 [env]
 PYTHONUNBUFFERED = "1"
 
-[processes]
-worker = "python bot.py"
+[mounts]
+source = "data"
+destination = "/data"

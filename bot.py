@@ -17,7 +17,9 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не задан!")
 
-BASE_FUND = 41000
+# Сколько уже было собрано родителями на момент запуска бота.
+# Новые взносы прибавляются к этой сумме.
+START_FUND = 45500
 DATA_FILE = "data.json"
 
 # Родительский комитет класса 1-К
@@ -155,9 +157,10 @@ def money(value):
 
 
 def totals(data):
+    """Возвращает (потрачено, фонд, остаток). Фонд = стартовая сумма + взносы."""
     spent = sum(e["amount"] for e in data["expenses"])
-    got = sum(c["amount"] for c in data["contributions"])
-    return spent, got, BASE_FUND + got - spent
+    fund = START_FUND + sum(c["amount"] for c in data["contributions"])
+    return spent, fund, fund - spent
 
 
 def normalize(text):
@@ -215,13 +218,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
-    spent, got, left = totals(data)
+    spent, fund, left = totals(data)
 
     lines = [
         "📊 ФИНАНСОВЫЙ ОТЧЁТ",
         "",
-        f"💰 Базовый фонд: {money(BASE_FUND)} ₽",
-        f"➕ Взносы: {money(got)} ₽",
+        f"💰 Фонд класса: {money(fund)} ₽",
         f"➖ Расходы: {money(spent)} ₽",
         "━━━━━━━━━━━━━━━━",
         f"✅ Остаток: {money(left)} ₽",
@@ -317,7 +319,7 @@ async def export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from openpyxl.styles import Font, PatternFill, Alignment
 
     data = load_data()
-    spent, got, left = totals(data)
+    spent, fund, left = totals(data)
 
     header_fill = PatternFill("solid", fgColor="D9E2F3")
     bold = Font(bold=True)
@@ -333,16 +335,14 @@ async def export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ws["A2"] = "МБОУ «СШ №23», Красноярск"
     ws["A3"] = f"Сформирован: {datetime.now().strftime('%d.%m.%Y')}"
 
-    ws["A5"] = "Базовый фонд"
-    ws["B5"] = BASE_FUND
-    ws["A6"] = "Взносы"
-    ws["B6"] = got
-    ws["A7"] = "Расходы"
-    ws["B7"] = spent
-    ws["A8"] = "Остаток"
-    ws["B8"] = left
-    ws["A8"].font = bold
-    ws["B8"].font = bold
+    ws["A5"] = "Фонд класса"
+    ws["B5"] = fund
+    ws["A6"] = "Расходы"
+    ws["B6"] = spent
+    ws["A7"] = "Остаток"
+    ws["B7"] = left
+    ws["A7"].font = bold
+    ws["B7"].font = bold
 
     if data["expenses"]:
         by_cat = {}
@@ -454,7 +454,9 @@ async def expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔒 Добавлять расходы может только родительский комитет."
         )
         return ConversationHandler.END
-    await update.message.reply_text("💵 Введите сумму расхода в рублях:")
+    await update.message.reply_text(
+        "💵 Введите сумму расхода в рублях:", reply_markup=cancel_keyboard()
+    )
     return AMOUNT
 
 
@@ -468,20 +470,24 @@ async def expense_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("❌ Нужно число больше нуля. Например: 1500")
         return AMOUNT
-    keyboard = ReplyKeyboardMarkup([[c] for c in CATEGORIES], resize_keyboard=True)
+    keyboard = ReplyKeyboardMarkup(
+        [[c] for c in CATEGORIES] + [["❌ Отмена"]], resize_keyboard=True
+    )
     await update.message.reply_text("📂 Выберите категорию:", reply_markup=keyboard)
     return CATEGORY
 
 
 async def expense_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["category"] = update.message.text
-    await update.message.reply_text("📝 На что потратили:")
+    await update.message.reply_text(
+        "📝 На что потратили:", reply_markup=cancel_keyboard()
+    )
     return DESCRIPTION
 
 
 async def expense_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["description"] = update.message.text
-    await update.message.reply_text("👤 Кто оплатил:")
+    await update.message.reply_text("👤 Кто оплатил:", reply_markup=cancel_keyboard())
     return WHO
 
 
@@ -497,7 +503,7 @@ async def expense_who(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     )
     save_data(data)
-    spent, got, left = totals(data)
+    spent, fund, left = totals(data)
     amount = context.user_data["amount"]
     category = context.user_data["category"]
     context.user_data.clear()
@@ -520,7 +526,9 @@ async def contrib_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔒 Добавлять взносы может только родительский комитет."
         )
         return ConversationHandler.END
-    await update.message.reply_text("💵 Введите сумму взноса в рублях:")
+    await update.message.reply_text(
+        "💵 Введите сумму взноса в рублях:", reply_markup=cancel_keyboard()
+    )
     return CONTRIB_AMOUNT
 
 
@@ -534,7 +542,9 @@ async def contrib_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("❌ Нужно число больше нуля. Например: 500")
         return CONTRIB_AMOUNT
-    await update.message.reply_text("👤 От кого взнос:")
+    await update.message.reply_text(
+        "👤 От кого взнос:", reply_markup=cancel_keyboard()
+    )
     return CONTRIB_WHO
 
 
@@ -548,15 +558,15 @@ async def contrib_who(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     )
     save_data(data)
-    spent, got, left = totals(data)
+    spent, fund, left = totals(data)
     amount = context.user_data["contrib_amount"]
     context.user_data.clear()
 
     await update.message.reply_text(
-        "✅ Взнос добавлен\n\n"
-        f"💵 {money(amount)} ₽\n"
-        f"от {update.message.text}\n\n"
-        f"Остаток: {money(left)} ₽",
+        "✅ Взнос добавлен в фонд\n\n"
+        f"💵 {money(amount)} ₽ от {update.message.text}\n\n"
+        f"💰 Фонд класса: {money(fund)} ₽\n"
+        f"✅ Остаток: {money(left)} ₽",
         reply_markup=main_keyboard(update.effective_user.id),
     )
     return ConversationHandler.END
@@ -566,6 +576,23 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(
         "Отменено.", reply_markup=main_keyboard(update.effective_user.id)
+    )
+    return ConversationHandler.END
+
+
+async def cancel_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/start внутри диалога: выходим из диалога и показываем меню."""
+    context.user_data.clear()
+    await start(update, context)
+    return ConversationHandler.END
+
+
+async def cancel_any_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Любая другая команда внутри диалога тоже выбивает из него."""
+    context.user_data.clear()
+    await update.message.reply_text(
+        "Ввод отменён. Нажмите кнопку или команду ещё раз.",
+        reply_markup=main_keyboard(update.effective_user.id),
     )
     return ConversationHandler.END
 
@@ -618,7 +645,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in ("отменить последний расход", "отменить"):
         await undo_last(update, context)
         return
-    if text in ("назад", "меню"):
+    if text in ("отмена", "назад", "меню"):
         await update.message.reply_text(
             "Главное меню", reply_markup=main_keyboard(user_id)
         )
@@ -639,20 +666,30 @@ async def on_error(update, context):
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
+    menu_filter = filters.Regex(MENU_RE)
+    # В каждом шаге диалога кнопка меню обрабатывается ПЕРВОЙ и прерывает диалог,
+    # а обычный ввод принимается только если это не кнопка меню.
+    step = lambda cb: [
+        MessageHandler(menu_filter, interrupt),
+        MessageHandler(filters.TEXT & ~filters.COMMAND & ~menu_filter, cb),
+    ]
+
     expense_conv = ConversationHandler(
         entry_points=[
             CommandHandler("expense", expense_start),
             MessageHandler(filters.Regex(r"^➕ Расход$"), expense_start),
         ],
         states={
-            AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, expense_amount)],
-            CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, expense_category)],
-            DESCRIPTION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, expense_description)
-            ],
-            WHO: [MessageHandler(filters.TEXT & ~filters.COMMAND, expense_who)],
+            AMOUNT: step(expense_amount),
+            CATEGORY: step(expense_category),
+            DESCRIPTION: step(expense_description),
+            WHO: step(expense_who),
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("start", cancel),
+            CommandHandler("report", cancel),
+        ],
     )
 
     contrib_conv = ConversationHandler(
@@ -661,12 +698,14 @@ def main():
             MessageHandler(filters.Regex(r"^➕ Взнос$"), contrib_start),
         ],
         states={
-            CONTRIB_AMOUNT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, contrib_amount)
-            ],
-            CONTRIB_WHO: [MessageHandler(filters.TEXT & ~filters.COMMAND, contrib_who)],
+            CONTRIB_AMOUNT: step(contrib_amount),
+            CONTRIB_WHO: step(contrib_who),
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("start", cancel),
+            CommandHandler("report", cancel),
+        ],
     )
 
     app.add_handler(CommandHandler("start", start))

@@ -107,6 +107,14 @@ BIRTHDAYS = {
 AMOUNT, CATEGORY, DESCRIPTION, WHO = range(4)
 CONTRIB_AMOUNT, CONTRIB_WHO = range(4, 6)
 
+# Кнопки главного меню. Если их нажать посреди диалога, диалог прерывается
+# и выполняется само действие, а не принимается за ввод суммы.
+MENU_RE = (
+    r"^(📊 Отчёт|📈 История|🎂 Дни рождения|📥 Экспорт|"
+    r"↩️ Отменить последний расход|⬅️ Назад|❌ Отмена|"
+    r"➕ Расход|➕ Взнос)$"
+)
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -169,6 +177,10 @@ def main_keyboard(user_id):
     if is_committee(user_id):
         rows.append(["↩️ Отменить последний расход"])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
+
+
+def cancel_keyboard():
+    return ReplyKeyboardMarkup([["❌ Отмена"]], resize_keyboard=True)
 
 
 def months_keyboard():
@@ -555,6 +567,20 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Отменено.", reply_markup=main_keyboard(update.effective_user.id)
     )
+    return ConversationHandler.END
+
+
+async def interrupt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Нажата кнопка меню посреди диалога: прерываем диалог и выполняем кнопку."""
+    context.user_data.clear()
+    text = normalize(update.message.text or "")
+    if text in ("расход", "взнос"):
+        await update.message.reply_text(
+            "Предыдущий ввод отменён. Нажмите кнопку ещё раз.",
+            reply_markup=main_keyboard(update.effective_user.id),
+        )
+    else:
+        await handle_text(update, context)
     return ConversationHandler.END
 
 

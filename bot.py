@@ -1,6 +1,5 @@
 import os
 import json
-os.makedirs("/data", exist_ok=True)
 
 import logging
 from datetime import datetime
@@ -14,8 +13,8 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 BASE_FUND = 41000
-DATA_FILE = "/data/data.json"
-PERSISTENCE_FILE = "/data/conv_state"
+DATA_FILE = "data.json"
+PERSISTENCE_FILE = "conv_state"
 CATEGORIES = ["📚 Материалы", "🍕 Питание", "🎉 Мероприятие", "🏠 Организационные", "🚗 Доставка"]
 COMMITTEE_IDS = [447774674, 6013055364]
 

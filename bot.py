@@ -260,26 +260,55 @@ async def export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     os.remove(filename)
 
-async def birthdays_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    month = update.message.text.lower().strip('/')
-
-    if month not in BIRTHDAYS:
-        await update.message.reply_text("❌ Напиши месяц: /январь, /февраль, /март и т.д.")
-        return
-
-    birthdays = BIRTHDAYS[month]
+async def show_birthdays(update: Update, month_key: str, month_name: str):
+    birthdays = BIRTHDAYS[month_key]
 
     if not birthdays:
-        await update.message.reply_text(f"🎂 В {month.capitalize()} дней рождений нет")
+        await update.message.reply_text(f"🎂 В {month_name} дней рождений нет")
         return
 
-    month_name = month.capitalize()
     text = f"🎂 ДНЕЙ РОЖДЕНИЙ В {month_name.upper()}\n\n"
 
     for name, date in birthdays:
         text += f"• {name} - {date}\n"
 
     await update.message.reply_text(text)
+
+async def january(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "январь", "Январь")
+
+async def february(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "февраль", "Февраль")
+
+async def march(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "март", "Март")
+
+async def april(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "апрель", "Апрель")
+
+async def may(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "май", "Май")
+
+async def june(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "июнь", "Июнь")
+
+async def july(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "июль", "Июль")
+
+async def august(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "август", "Август")
+
+async def september(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "сентябрь", "Сентябрь")
+
+async def october(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "октябрь", "Октябрь")
+
+async def november(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "ноябрь", "Ноябрь")
+
+async def december(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_birthdays(update, "декабрь", "Декабрь")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
@@ -332,11 +361,19 @@ async def main():
     app.add_handler(CommandHandler("history", history))
     app.add_handler(CommandHandler("export", export_excel))
 
-    # Месяцы команды
-    months = ["январь", "февраль", "март", "апрель", "май", "июнь",
-              "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
-    for month in months:
-        app.add_handler(CommandHandler(month, birthdays_handler))
+    # Месяцы команды (только английский!)
+    app.add_handler(CommandHandler("january", january))
+    app.add_handler(CommandHandler("february", february))
+    app.add_handler(CommandHandler("march", march))
+    app.add_handler(CommandHandler("april", april))
+    app.add_handler(CommandHandler("may", may))
+    app.add_handler(CommandHandler("june", june))
+    app.add_handler(CommandHandler("july", july))
+    app.add_handler(CommandHandler("august", august))
+    app.add_handler(CommandHandler("september", september))
+    app.add_handler(CommandHandler("october", october))
+    app.add_handler(CommandHandler("november", november))
+    app.add_handler(CommandHandler("december", december))
 
     app.add_handler(expense_handler)
     app.add_handler(contribution_handler)

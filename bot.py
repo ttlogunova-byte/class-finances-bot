@@ -44,9 +44,12 @@ logger = logging.getLogger(__name__)
 
 def load_data():
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"expenses": [], "news": [], "fundraisers": [], "events": []}
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"expenses": [], "contributions": [], "news": [], "fundraisers": [], "events": []}
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -55,22 +58,77 @@ def save_data(data):
 def is_committee(user_id):
     return user_id in COMMITTEE_IDS
 
+def create_excel_report(data):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Финансы"
+    
+    ws['A1'] = "ОТЧЁТ О ФИНАНСАХ класса 1-К"
+    ws['A1'].font = Font(size=14, bold=True)
+    ws.merge_cells('A1:E1')
+    
+    ws['A2'] = f"Создано: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    
+    expenses = sum(e["amount"] for e in data["expenses"])
+    contributions = sum(c["amount"] for c in data.get("contributions", []))
+    current = BASE_FUND + contributions - expenses
+    
+    ws['A4'] = "ФИНАНСОВАЯ СВОДКА"
+    ws['A4'].font = Font(bold=True)
+    ws['A5'] = "Базовый фонд:"
+    ws['B5'] = BASE_FUND
+    ws['A6'] = "Взносы:"
+    ws['B6'] = contributions
+    ws['A7'] = "Расходы:"
+    ws['B7'] = expenses
+    ws['A8'] = "Остаток:"
+    ws['B8'] = current
+    ws['B8'].font = Font(bold=True, color="008000")
+    
+    ws['A10'] = "РАСХОДЫ"
+    ws['A10'].font = Font(bold=True)
+    
+    headers = ["Дата", "Сумма (₽)", "Категория", "Описание", "От кого"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=11, column=col)
+        cell.value = header
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    
+    row = 12
+    for exp in data["expenses"]:
+        ws.cell(row=row, column=1).value = exp['date']
+        ws.cell(row=row, column=2).value = exp['amount']
+        ws.cell(row=row, column=3).value = exp['category']
+        ws.cell(row=row, column=4).value = exp['description']
+        ws.cell(row=row, column=5).value = exp['who']
+        row += 1
+    
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 30
+    ws.column_dimensions['E'].width = 20
+    
+    wb.save("/tmp/expenses.xlsx")
+    return "/tmp/expenses.xlsx"
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.effective_user.first_name or "Друг"
     
     if is_committee(user_id):
         msg = f"👋 Привет, {name}! Бот класса 1-К (КОМИТЕТ)\n"
-        msg += f"🆔 **ID: {user_id}**\n\n"
+        msg += f"🆔 ID: {user_id}\n\n"
         msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
         msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n\n"
         msg += "📰 НОВОСТИ:\n/news — новости\n\n"
         msg += "🎯 СБОРЫ:\n/fundraisers — сборы\n\n"
         msg += "📅 СОБЫТИЯ:\n/events — события\n\n"
-        msg += "🛠️ КОМИТЕТ:\n/expense — расход\n/contribution — взнос\n/addnews — новость\n/newfund — сбор\n/newevent — событие\n/deletexp — удалить расход"
+        msg += "🛠️ КОМИТЕТ:\n/expense — расход\n/contribution — взнос\n/addnews — новость\n/newevent — событие\n/deletexp — удалить расход"
     else:
         msg = f"👋 Привет, {name}! Бот класса 1-К\n"
-        msg += f"🆔 **ID: {user_id}**\n\n"
+        msg += f"🆔 ID: {user_id}\n\n"
         msg += "💰 ФИНАНСЫ:\n/report — финансы\n/history — расходы\n/export — скачать Excel\n\n"
         msg += "🎂 ДНИ РОЖДЕНИЯ:\n/birthdays — все ДР\n\n"
         msg += "📰 НОВОСТИ:\n/news — новости\n\n"
@@ -91,35 +149,6 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg += f"📈 **Остаток: {current:,} ₽**"
     await update.message.reply_text(msg)
 
-async def contribution_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_committee(update.effective_user.id):
-        await update.message.reply_text("❌ Нет прав")
-        return ConversationHandler.END
-    await update.message.reply_text("💳 Сумма взноса?")
-    return CONTRIB_AMOUNT
-
-async def contrib_amount_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        context.user_data["contrib_amount"] = float(update.message.text)
-        await update.message.reply_text("👤 От кого?")
-        return CONTRIB_WHO
-    except:
-        await update.message.reply_text("Введи число")
-        return CONTRIB_AMOUNT
-
-async def contrib_who_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = load_data()
-    if "contributions" not in data:
-        data["contributions"] = []
-    data["contributions"].append({
-        "date": datetime.now().strftime("%d.%m.%Y"),
-        "amount": context.user_data["contrib_amount"],
-        "who": update.message.text
-    })
-    save_data(data)
-    await update.message.reply_text(f"✅ Взнос добавлен!")
-    return ConversationHandler.END
-
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     if not data["expenses"]:
@@ -129,6 +158,21 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, e in enumerate(data["expenses"][-10:], 1):
         msg += f"{i}. {e['date']} | {e['amount']:,} ₽ | {e['description']}\n"
     await update.message.reply_text(msg)
+
+async def export_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⏳ Создаю Excel...")
+    data = load_data()
+    try:
+        file_path = create_excel_report(data)
+        with open(file_path, 'rb') as f:
+            await update.message.reply_document(
+                document=f,
+                filename=f"Финансы_1К_{datetime.now().strftime('%d.%m.%Y')}.xlsx",
+                caption="📊 Финансовый отчёт"
+            )
+        os.remove(file_path)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def show_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -209,8 +253,31 @@ async def who_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Расход добавлен!")
     return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ Отменено")
+async def contribution_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_committee(update.effective_user.id):
+        await update.message.reply_text("❌ Нет прав")
+        return ConversationHandler.END
+    await update.message.reply_text("💳 Сумма взноса?")
+    return CONTRIB_AMOUNT
+
+async def contrib_amount_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        context.user_data["contrib_amount"] = float(update.message.text)
+        await update.message.reply_text("👤 От кого?")
+        return CONTRIB_WHO
+    except:
+        await update.message.reply_text("Введи число")
+        return CONTRIB_AMOUNT
+
+async def contrib_who_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = load_data()
+    data["contributions"].append({
+        "date": datetime.now().strftime("%d.%m.%Y"),
+        "amount": context.user_data["contrib_amount"],
+        "who": update.message.text
+    })
+    save_data(data)
+    await update.message.reply_text("✅ Взнос добавлен!")
     return ConversationHandler.END
 
 async def add_news_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,6 +298,34 @@ async def news_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Новость добавлена!")
     return ConversationHandler.END
 
+async def create_event_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_committee(update.effective_user.id):
+        await update.message.reply_text("❌ Нет прав")
+        return ConversationHandler.END
+    await update.message.reply_text("Название события?")
+    return EVENT_NAME
+
+async def event_name_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["event_name"] = update.message.text
+    await update.message.reply_text("Дата? (дд.мм.гггг)")
+    return EVENT_DATE
+
+async def event_date_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["event_date"] = update.message.text
+    await update.message.reply_text("Описание?")
+    return EVENT_DESC
+
+async def event_desc_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = load_data()
+    data["events"].append({
+        "name": context.user_data["event_name"],
+        "date": context.user_data["event_date"],
+        "description": update.message.text
+    })
+    save_data(data)
+    await update.message.reply_text("✅ Событие добавлено!")
+    return ConversationHandler.END
+
 async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_committee(update.effective_user.id):
         await update.message.reply_text("❌ Нет прав")
@@ -242,6 +337,10 @@ async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     e = data["expenses"].pop()
     save_data(data)
     await update.message.reply_text(f"✅ Удалён: {e['amount']:,} ₽ ({e['description']})")
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Отменено")
+    return ConversationHandler.END
 
 def main():
     if not BOT_TOKEN:
@@ -263,14 +362,6 @@ def main():
         persistent=True
     )
     
-    news_conv = ConversationHandler(
-        entry_points=[CommandHandler("addnews", add_news_start)],
-        states={NEWS_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, news_received)]},
-        fallbacks=[CommandHandler("cancel", cancel)],
-        name="news",
-        persistent=True
-    )
-    
     contrib_conv = ConversationHandler(
         entry_points=[CommandHandler("contribution", contribution_start)],
         states={
@@ -282,17 +373,39 @@ def main():
         persistent=True
     )
     
+    news_conv = ConversationHandler(
+        entry_points=[CommandHandler("addnews", add_news_start)],
+        states={NEWS_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, news_received)]},
+        fallbacks=[CommandHandler("cancel", cancel)],
+        name="news",
+        persistent=True
+    )
+    
+    event_conv = ConversationHandler(
+        entry_points=[CommandHandler("newevent", create_event_start)],
+        states={
+            EVENT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, event_name_received)],
+            EVENT_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, event_date_received)],
+            EVENT_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, event_desc_received)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        name="event",
+        persistent=True
+    )
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report))
     app.add_handler(CommandHandler("history", history))
+    app.add_handler(CommandHandler("export", export_expenses))
     app.add_handler(CommandHandler("news", show_news))
     app.add_handler(CommandHandler("birthdays", show_birthdays))
     app.add_handler(CommandHandler("fundraisers", show_fundraisers))
     app.add_handler(CommandHandler("events", show_events))
     app.add_handler(CommandHandler("deletexp", delete_expense))
     app.add_handler(expense_conv)
-    app.add_handler(news_conv)
     app.add_handler(contrib_conv)
+    app.add_handler(news_conv)
+    app.add_handler(event_conv)
     
     logger.info("✅ БОТ ЗАПУЩЕН!")
     app.run_polling()

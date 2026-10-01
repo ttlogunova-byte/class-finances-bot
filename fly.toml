@@ -9,7 +9,3 @@ PYTHONUNBUFFERED = "1"
 
 [processes]
 worker = "python bot.py"
-
-[mounts]
-source = "data"
-destination = "/data"

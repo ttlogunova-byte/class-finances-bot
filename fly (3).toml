@@ -1,0 +1,19 @@
+app = "class-finances-bot"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+
+# Постоянный диск: всё, что бот пишет в /data, переживает
+# перезапуски и деплои. Volume создаётся отдельной командой:
+#   flyctl volumes create bot_data --size 1 --region ams -a class-finances-bot
+[mounts]
+  source = "bot_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

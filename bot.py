@@ -20,7 +20,14 @@ if not BOT_TOKEN:
 # Сколько уже было собрано родителями на момент запуска бота.
 # Новые взносы прибавляются к этой сумме.
 START_FUND = 45500
-DATA_FILE = "data.json"
+
+# Постоянное хранилище. На Fly.io сюда монтируется volume — папка /data
+# переживает перезапуски и деплои. Если volume не подключён, бот пишет
+# рядом с собой и предупреждает в логах, что данные временные.
+DATA_DIR = os.environ.get("DATA_DIR", "/data")
+if not os.path.isdir(DATA_DIR):
+    DATA_DIR = "."
+DATA_FILE = os.path.join(DATA_DIR, "data.json")
 
 # Родительский комитет класса 1-К
 COMMITTEE_IDS = [447774674, 6013055364]
@@ -141,9 +148,15 @@ def load_data():
 
 
 def save_data(data):
+    """Пишем во временный файл и подменяем — чтобы не потерять всё,
+    если бот упадёт прямо во время записи."""
+    tmp = DATA_FILE + ".tmp"
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, DATA_FILE)
     except Exception as e:
         logger.error("Не удалось сохранить %s: %s", DATA_FILE, e)
 
@@ -427,6 +440,27 @@ async def export_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     os.remove(filename)
 
 
+async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Присылает сам файл данных — его можно сохранить и вернуть обратно."""
+    if not is_committee(update.effective_user.id):
+        await update.message.reply_text("🔒 Это может сделать только комитет.")
+        return
+    if not os.path.exists(DATA_FILE):
+        await update.message.reply_text("📭 Данных пока нет.")
+        return
+    data = load_data()
+    with open(DATA_FILE, "rb") as f:
+        await update.message.reply_document(
+            f,
+            filename=f"data_{datetime.now().strftime('%d%m%Y')}.json",
+            caption=(
+                f"Резервная копия\n"
+                f"Расходов: {len(data['expenses'])}, взносов: {len(data['contributions'])}\n"
+                f"Хранилище: {'постоянное' if DATA_DIR != '.' else 'ВРЕМЕННОЕ (!)'}"
+            ),
+        )
+
+
 async def undo_last(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_committee(update.effective_user.id):
         await update.message.reply_text("🔒 Это может сделать только комитет.")
@@ -657,6 +691,46 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Комитет присылает боту файл data.json — данные восстанавливаются из него."""
+    if not is_committee(update.effective_user.id):
+        return
+    doc = update.message.document
+    if not doc or not doc.file_name.lower().endswith(".json"):
+        return
+
+    try:
+        tg_file = await doc.get_file()
+        raw = await tg_file.download_as_bytearray()
+        new_data = json.loads(raw.decode("utf-8"))
+        if not isinstance(new_data, dict):
+            raise ValueError("не словарь")
+        new_data.setdefault("expenses", [])
+        new_data.setdefault("contributions", [])
+        for e in new_data["expenses"]:
+            float(e["amount"])
+        for c in new_data["contributions"]:
+            float(c["amount"])
+    except Exception as e:
+        logger.error("Восстановление не удалось: %s", e)
+        await update.message.reply_text(
+            "❌ Не получилось прочитать файл. Нужен data.json из команды /backup."
+        )
+        return
+
+    old = load_data()
+    save_data(new_data)
+    spent, fund, left = totals(new_data)
+    await update.message.reply_text(
+        "✅ Данные восстановлены\n\n"
+        f"Было: расходов {len(old['expenses'])}, взносов {len(old['contributions'])}\n"
+        f"Стало: расходов {len(new_data['expenses'])}, взносов {len(new_data['contributions'])}\n\n"
+        f"💰 Фонд класса: {money(fund)} ₽\n"
+        f"✅ Остаток: {money(left)} ₽",
+        reply_markup=main_keyboard(update.effective_user.id),
+    )
+
+
 async def on_error(update, context):
     logger.error("Ошибка при обработке обновления", exc_info=context.error)
 
@@ -686,9 +760,9 @@ def main():
             WHO: step(expense_who),
         },
         fallbacks=[
+            CommandHandler("start", cancel_to_start),
             CommandHandler("cancel", cancel),
-            CommandHandler("start", cancel),
-            CommandHandler("report", cancel),
+            MessageHandler(filters.COMMAND, cancel_any_command),
         ],
     )
 
@@ -702,24 +776,36 @@ def main():
             CONTRIB_WHO: step(contrib_who),
         },
         fallbacks=[
+            CommandHandler("start", cancel_to_start),
             CommandHandler("cancel", cancel),
-            CommandHandler("start", cancel),
-            CommandHandler("report", cancel),
+            MessageHandler(filters.COMMAND, cancel_any_command),
         ],
     )
 
+    # ВАЖНО: диалоги регистрируются ПЕРВЫМИ. Иначе глобальная команда
+    # перехватит /start раньше диалога, и диалог останется висеть в своём шаге.
+    app.add_handler(expense_conv)
+    app.add_handler(contrib_conv)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", start))
+    app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CommandHandler("report", report))
     app.add_handler(CommandHandler("history", history))
     app.add_handler(CommandHandler("export", export_excel))
     app.add_handler(CommandHandler("birthdays", birthdays_all))
     app.add_handler(CommandHandler("undo", undo_last))
-    app.add_handler(expense_conv)
-    app.add_handler(contrib_conv)
+    app.add_handler(CommandHandler("backup", backup))
+    app.add_handler(MessageHandler(filters.Document.ALL, restore))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_error_handler(on_error)
 
+    if DATA_DIR == ".":
+        logger.warning(
+            "ВНИМАНИЕ: постоянное хранилище не подключено. "
+            "Данные будут потеряны при перезапуске. Нужен volume на /data."
+        )
+    else:
+        logger.info("Хранилище: %s", DATA_FILE)
     logger.info("Бот запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 

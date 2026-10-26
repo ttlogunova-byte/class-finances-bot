@@ -21,12 +21,14 @@ jobs:
 
       - name: Create volume if missing
         run: |
-          if flyctl volumes list -a "$FLY_APP" | grep -q bot_data; then
-            echo "Volume bot_data already exists"
-          else
-            echo "Creating volume bot_data"
+          set -eux
+          flyctl volumes list -a "$FLY_APP" || true
+          COUNT=$(flyctl volumes list -a "$FLY_APP" --json | jq '[.[] | select(.name=="bot_data")] | length')
+          echo "volumes named bot_data: $COUNT"
+          if [ "${COUNT:-0}" -lt 1 ]; then
             flyctl volumes create bot_data --size 1 --region ams -a "$FLY_APP" --yes
           fi
+          flyctl volumes list -a "$FLY_APP"
 
       - name: Deploy
         run: flyctl deploy --remote-only -a "$FLY_APP"
